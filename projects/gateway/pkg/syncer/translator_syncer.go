@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"fmt"
+	"runtime"
 
 	"go.uber.org/zap/zapcore"
 
@@ -110,11 +111,13 @@ func (s *translatorSyncer) propagateProxyStatus(ctx context.Context, proxy *gloo
 		for {
 			select {
 			case <-ctx.Done():
+				contextutils.LoggerFrom(ctx).Infof("closing goroutine")
 				return
 			case status := <-statuses:
 				logger := contextutils.LoggerFrom(ctx)
-				logger.Debugf("gateway received proxy status: %v", status)
+				logger.Infof("gateway received proxy status: %v", status)
 				if status.Equal(lastStatus) {
+					logger.Infof("status were equal, skipping %v", lastStatus)
 					continue
 				}
 				lastStatus = status
@@ -122,9 +125,10 @@ func (s *translatorSyncer) propagateProxyStatus(ctx context.Context, proxy *gloo
 					fmt.Sprintf("%T.%s", proxy, proxy.GetMetadata().Ref().Key()): &status,
 				}
 
-				logger.Debugw("gateway reports to be written",
-					zap.Any("reports", reports),
-					zap.Any("subresourceStatuses", subresourceStatuses))
+				logger.Infow("gateway reports to be written",
+					//zap.Any("reports", reports),
+					//zap.Any("subresourceStatuses", subresourceStatuses),
+					zap.Any("num go routines", runtime.NumGoroutine()))
 
 				err := s.reporter.WriteReports(ctx, reports, subresourceStatuses)
 				if err != nil {
